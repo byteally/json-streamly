@@ -5,34 +5,33 @@ module Streamly.Json
   , decodeFileWithBufferOf
   ) where
 
-import Streamly.Prelude as S
+import           Control.Monad.Catch
+import           Data.Either
+import           Data.JsonStream.Parser
+import           Data.Word
+import           Streamly.Data.Array
+import qualified Streamly.Data.Stream.Prelude as Stream
 import qualified Streamly.Data.Unfold as Unfold
-import Data.JsonStream.Parser
-import qualified Streamly.Internal.FileSystem.File as File
-import Data.Word
 import qualified Streamly.External.ByteString as Strict
-import Streamly.Data.Array.Foreign
-import Control.Monad.Catch
-import Data.Either
-
-
+import qualified Streamly.Internal.Data.Stream as Stream
+import qualified Streamly.Internal.FileSystem.File as File
 
 -- Uses `defaultChunkSize`
-decodeFile :: (IsStream t, MonadCatch m, MonadAsync m) => FilePath -> Parser a -> t m a
-decodeFile fp p = flip decodeStream p $ File.toChunks fp
+decodeFile :: (MonadCatch m, Stream.MonadAsync m) => FilePath -> Parser a -> Stream.Stream m a
+decodeFile fp p = flip decodeStream p $ File.readChunks fp
 
-decodeFileWithBufferOf :: (IsStream t, MonadCatch m, MonadAsync m) => Int -> FilePath -> Parser a -> t m a
-decodeFileWithBufferOf sz fp p = flip decodeStream p $ File.toChunksWithBufferOf sz fp
+decodeFileWithBufferOf :: (MonadCatch m, Stream.MonadAsync m) => Int -> FilePath -> Parser a -> Stream.Stream m a
+decodeFileWithBufferOf sz fp p = flip decodeStream p $ File.readChunksWith sz fp
 
 -- TODO: handle ParseFailed
-decodeStream :: (IsStream t, MonadCatch m, MonadAsync m) => t m (Array Word8) -> Parser a -> t m a
-decodeStream w8ArrStrm p = S.unfoldMany Unfold.fromList
-                           $ S.mapMaybe (\case
+decodeStream :: (MonadCatch m, Stream.MonadAsync m) => Stream.Stream m (Array Word8) -> Parser a -> Stream.Stream m a
+decodeStream w8ArrStrm p = Stream.unfoldMany Unfold.fromList
+                           $ Stream.mapMaybe (\case
                                           (_, Right mv) -> mv
                                           _ -> error "Panic: Unreachable pat Left"
                                           )
-                           $ S.takeWhile (isRight . snd)
-                           $ S.scanl' (\(po, _) w8Arr -> case po of
+                           $ Stream.takeWhile (isRight . snd)
+                           $ Stream.scanl' (\(po, _) w8Arr -> case po of
                                         ParseNeedData k -> (k $ Strict.fromArray w8Arr, Right Nothing)
                                         ParseFailed err -> (po, Left $ Just err)
                                         ParseDone _rst -> (po, Left Nothing)
