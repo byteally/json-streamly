@@ -36,6 +36,8 @@ library
                     , aeson < 2.2
                     , exceptions >= 0.1.0
                     , monad-control >= 1.0
+                    , text
+
     hs-source-dirs:   src
     default-language: Haskell2010
     ghc-options :    -Wall
